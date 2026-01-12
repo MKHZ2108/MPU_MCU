@@ -1,0 +1,83 @@
+#include "scheduler.h"
+#include <stddef.h> // Để dùng NULL
+
+sTask SCH_tasks_G[SCH_MAX_TASKS];
+
+void SCH_Init(void) {
+    for (uint32_t i = 0; i < SCH_MAX_TASKS; i++) {
+        // Xóa tất cả các tác vụ hiện có
+        SCH_Delete_Task(i);
+    }
+}
+
+uint32_t SCH_Add_Task(void (*pFunction)(), uint32_t DELAY, uint32_t PERIOD) {
+    uint32_t index = 0;
+
+    // Tìm một vị trí trống trong mảng tác vụ
+    while ((SCH_tasks_G[index].pTask != NULL) && (index < SCH_MAX_TASKS)) {
+        index++;
+    }
+
+    // Nếu mảng đã đầy, trả về lỗi
+    if (index == SCH_MAX_TASKS) {
+        // Có thể thêm mã xử lý lỗi ở đây
+        return SCH_MAX_TASKS;
+    }
+
+    // "Điền thông tin" vào vị trí trống tìm được
+    SCH_tasks_G[index].pTask = pFunction;
+    SCH_tasks_G[index].Delay = DELAY;
+    SCH_tasks_G[index].Period = PERIOD;
+    SCH_tasks_G[index].RunMe = 0;
+    SCH_tasks_G[index].TaskID = index;
+
+    return index; // Trả về ID của tác vụ
+}
+
+void SCH_Update(void) {
+    for (uint32_t i = 0; i < SCH_MAX_TASKS; i++) {
+        // Kiểm tra xem có tác vụ tại vị trí này không
+        if (SCH_tasks_G[i].pTask) {
+            if (SCH_tasks_G[i].Delay == 0) {
+                // Tác vụ đã đến lúc chạy
+                SCH_tasks_G[i].RunMe += 1; // Tăng cờ RunMe [cite: 346]
+                if (SCH_tasks_G[i].Period) {
+                    // Nếu là tác vụ định kỳ, đặt lại Delay
+                    SCH_tasks_G[i].Delay = SCH_tasks_G[i].Period;
+                }
+            } else {
+                // Nếu chưa đến lúc, giảm Delay đi 1 [cite: 364]
+                SCH_tasks_G[i].Delay -= 1;
+            }
+        }
+    }
+}
+
+void SCH_Dispatch_Tasks(void) {
+    for (uint32_t i = 0; i < SCH_MAX_TASKS; i++) {
+        // Nếu tác vụ sẵn sàng để chạy (cờ RunMe > 0)
+        if (SCH_tasks_G[i].RunMe > 0) {
+            (*SCH_tasks_G[i].pTask)(); // Thực thi tác vụ [cite: 453]
+            SCH_tasks_G[i].RunMe -= 1; // Giảm cờ RunMe
+
+            // Nếu đây là tác vụ chạy 1 lần (one-shot), xóa nó đi
+            if (SCH_tasks_G[i].Period == 0) {
+                SCH_Delete_Task(i);
+            }
+        }
+    }
+}
+
+uint8_t SCH_Delete_Task(uint32_t taskID) {
+    if (taskID >= SCH_MAX_TASKS) {
+        return 1; // ID không hợp lệ
+    }
+
+    // Xóa thông tin tác vụ
+    SCH_tasks_G[taskID].pTask = NULL;
+    SCH_tasks_G[taskID].Delay = 0;
+    SCH_tasks_G[taskID].Period = 0;
+    SCH_tasks_G[taskID].RunMe = 0;
+
+    return 0; // Xóa thành công
+}
